@@ -24,30 +24,72 @@ from openai import OpenAI
 dotenv.load_dotenv()
 
 
-tools_registry = {
-    "mail": {
-        "name": "mail",
-        "description": "Send an email",
-        "parameters": {
-            "email": "string",
+tools_registry = [
+    {
+        "type": "function",
+        "function": {
+            "name": "mail",
+            "description": "Send an email or diagnose email access issues",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "description": "The email address to send to or diagnose"
+                    },
+                    "action": {
+                        "type": "string",
+                        "enum": ["send", "diagnose", "reset_password"],
+                        "description": "The action to perform"
+                    }
+                },
+                "required": ["email", "action"]
+            }
         }
     },
-    "settings": {
-        "name": "settings",
-        "description": "Change a setting within your computer.",
-        "parameters": {
-            "setting": "string",
-            "value": "string",
+    {
+        "type": "function",
+        "function": {
+            "name": "settings",
+            "description": "Change a computer setting",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "setting": {
+                        "type": "string",
+                        "description": "The setting to change"
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "The new value for the setting"
+                    }
+                },
+                "required": ["setting", "value"]
+            }
         }
     },
-    "slack": {
-        "name": "slack",
-        "description": "Send a message to a Slack channel/user.",
-        "parameters": {
-            "message": "string",
+    {
+        "type": "function",
+        "function": {
+            "name": "slack",
+            "description": "Send a message to a Slack channel or user",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "The message to send"
+                    },
+                    "recipient": {
+                        "type": "string",
+                        "description": "The channel or user to send to"
+                    }
+                },
+                "required": ["message"]
+            }
         }
     }
-}
+]
 
 def call_tool(tool_name, tool_parameters):
     if tool_name == "mail":
@@ -60,6 +102,11 @@ def call_tool(tool_name, tool_parameters):
 def chat_loop():
     messages = []
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    messages.append({
+            "role": "system",
+            "content": "You are a helpful IT support agent. Help users with email, settings, and Slack issues. Use the available tools to assist them."
+        })
+
 
     while True:
         user_input = input("You: ")
@@ -78,84 +125,39 @@ def chat_loop():
             continue
 
 
-        prompt = f"""You are an IT support agent. 
-        
-        You are given a user's request and you need to help them with their request. 
-        
-        If you need to use a tool, you should use the tool to help the user. 
-        If you don't need to use a tool, you should respond to the user's request.
+        messages.append({"role": "user", "content": user_input})
 
-        User's request: {user_input}
-
-        Are you confident that you can help the user with their request?
-
-        If you are confident, respond with "Yes, I can help with that.", print which tool you will use, and then call the necessary tools to help the user.
-        If you are not confident, respond with "No, I can't help with that." and ask the user to clarify their request.
-        
-
-        Explain your reasoning for your answer.
-
-        Availalbe tools:
-        {tools_registry}
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            tools=tools_registry,
+            messages=messages[-5:],
+            tool_choice="auto"
+        )
 
 
-        Make sure your response is a valid JSON object. Response Schema:
-        {{
-            "can_assist": "Yes | No",
-            "reason": "Reason for your answer",
-            "tool_calls": [],
-            "tool_call_parameters": [],
-            "response": "Yes I can help with that! Please wait while I call the necessary tools to help you." | "[Clarification request]"
-        }}
 
-
-        """
-
-
-        messages.append({"role": "user", "content": prompt})
-
-        response = client.chat.completions.create(model="gpt-4o-mini", messages=messages[-5:])
-
-
-        print(f"Response: {response.choices[0].message.content}")
         assistant_message = response.choices[0].message.content
-        print(f"Raw response length: {len(assistant_message)}")
-        print(f"First 50 chars: {repr(assistant_message[:50])}")
-        print(f"Last 50 chars: {repr(assistant_message[-50:])}")
-        print(f"Full response:\n{assistant_message}")
-        print("=" * 50)
-
-        # Now try to parse
-        try:
-            parsed_response = json.loads(assistant_message)
-            print(f"Parsed response: {parsed_response}")
-        except json.JSONDecodeError as e:
-            print(f"JSON Error: {e}")
-            print(f"Error at position: {e.pos}")
-            if e.pos < len(assistant_message):
-                print(f"Character at error position: {repr(assistant_message[e.pos])}")
-
-
-        #response_json = json.loads(response.choices[0].message.content)
-        messages.append({"role": "assistant", "content": parsed_response['response']})
-        print(f"Assistant: {parsed_response}")
-
-        if parsed_response["can_assist"] == "No":
-            print(f"Assistant: {parsed_response["response"]}")
-            continue
-
-        elif parsed_response["can_assist"] == "Yes":
-            print(f"Assistant: {parsed_response["response"]}")
-            tool_calls = parsed_response["tool_calls"]
-            tool_calls_parameters = parsed_response["tool_call_parameters"]
-
-            for i in range(len(tool_calls)):
-                tool_name = tool_calls[i]
-                tool_parameters = tool_calls_parameters[i]
+  
+        if assistant_message.tool_calls:
+            for tool_call in assistant_message.tool_calls:
+                tool_name = tool_call.name
+                tool_parameters = tool_call.arguments
                 tool_response = call_tool(tool_name, tool_parameters)
                 messages.append({"role": "tool", "content": tool_response})
                 print(f"Tool: {tool_name} Response: {tool_response}")
-            continue
+
+            
+            final_response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages[-10:]
+            )
+            messages.append({"role": "assistant", "content": final_response.choices[0].message.content})
+            print(f"Final response: {final_response.choices[0].message.content}")
+
+        else:
+            messages.append({"role": "assistant", "content": assistant_message.content})
+            print(f"Assistant: {assistant_message.content}")
+
 
 if __name__ == "__main__":
     chat_loop()
