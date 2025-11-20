@@ -123,13 +123,8 @@ fi
 echo ""
 echo "✅ Outlook profile has been reset!"
 sleep 0.5
-echo ""
-echo "📝 Next steps:"
 sleep 0.5
-echo "   1. Outlook will now reopen"
-echo "   2. You'll be prompted to sign in again"
-echo "   3. Enter your email and password"
-echo "   4. Wait for initial sync to complete (this may take a few minutes)"
+echo "   Outlook will now reopen!"
 sleep 0.5
 echo ""
 

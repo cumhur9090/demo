@@ -25,3 +25,4 @@ def get_tool(script_dir: str) -> Tool:
         risk_level="high"
     )
 
+

@@ -118,3 +118,4 @@ class ToolRegistry:
         
         return [tool.to_openai_format() for tool in tools]
 
+

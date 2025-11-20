@@ -172,3 +172,4 @@ Available tools:
         """Clear conversation history."""
         self.memory.clear()
 
+
