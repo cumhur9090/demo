@@ -1,0 +1,181 @@
+#!/bin/bash
+
+# Enable Camera and Microphone Permissions for Video Conferencing Apps (macOS)
+# This script helps users enable camera/microphone permissions for apps like Zoom or Teams
+
+APP_NAME="${1:-Zoom}"
+PERMISSION_TYPE="${2:-both}"
+
+echo "=== Camera/Microphone Permission Manager (macOS) ==="
+echo "Application: $APP_NAME"
+echo "Permission Type: $PERMISSION_TYPE"
+echo ""
+
+# Normalize app name
+case "$APP_NAME" in
+    "Teams"|"Microsoft Teams")
+        APP_DISPLAY="Microsoft Teams"
+        ;;
+    "Zoom"|"zoom.us")
+        APP_DISPLAY="Zoom"
+        ;;
+    "Slack")
+        APP_DISPLAY="Slack"
+        ;;
+    "Google Meet"|"Meet")
+        APP_DISPLAY="Google Chrome (for Google Meet)"
+        ;;
+    *)
+        APP_DISPLAY="$APP_NAME"
+        ;;
+esac
+
+# Check if running on macOS
+if [[ "$OSTYPE" != "darwin"* ]]; then
+    echo "Error: This script only works on macOS"
+    exit 1
+fi
+
+# Check if Terminal has accessibility permissions (needed to auto-click)
+ACCESSIBILITY_ENABLED=$(osascript -e 'tell application "System Events" to get UI elements enabled' 2>/dev/null)
+if [ "$ACCESSIBILITY_ENABLED" != "true" ]; then
+    echo "⚠️  Note: For automatic 'Quit & Reopen' clicking, Terminal needs"
+    echo "   Accessibility permissions in System Settings → Privacy & Security."
+    echo "   (Script will continue, but you may need to click manually)"
+    echo ""
+fi
+
+echo "🔍 Checking current permissions..."
+sleep 1
+
+# Check if the app is currently running
+APP_RUNNING=false
+case "$APP_NAME" in
+    "Zoom")
+        if pgrep -x "zoom.us" > /dev/null; then
+            APP_RUNNING=true
+            echo "✓ Zoom is currently running"
+        fi
+        ;;
+    "Teams"|"Microsoft Teams")
+        if pgrep -x "Microsoft Teams" > /dev/null; then
+            APP_RUNNING=true
+            echo "✓ Microsoft Teams is currently running"
+        fi
+        ;;
+    "Slack")
+        if pgrep -x "Slack" > /dev/null; then
+            APP_RUNNING=true
+            echo "✓ Slack is currently running"
+        fi
+        ;;
+esac
+
+if [ "$APP_RUNNING" = false ]; then
+    echo "⚠️  $APP_DISPLAY is not currently running"
+    echo "   (No need to quit & reopen)"
+fi
+
+echo ""
+
+# Determine what permissions to enable
+if [[ "$PERMISSION_TYPE" == "camera" ]]; then
+    PERMISSIONS_TEXT="Camera"
+elif [[ "$PERMISSION_TYPE" == "microphone" ]]; then
+    PERMISSIONS_TEXT="Microphone"
+else
+    PERMISSIONS_TEXT="Camera and Microphone"
+fi
+
+echo "📋 Actions to perform:"
+echo "   1. Open System Settings"
+echo "   2. Navigate to Privacy & Security"
+echo "   3. Enable $PERMISSIONS_TEXT for $APP_DISPLAY"
+echo ""
+
+# Open System Settings to Privacy & Security
+echo "🔧 Opening System Settings..."
+
+# Open Privacy & Security settings (Camera or Microphone)
+if [[ "$PERMISSION_TYPE" == "camera" ]] || [[ "$PERMISSION_TYPE" == "both" ]]; then
+    osascript -e 'tell application "System Settings"
+        activate
+        delay 0.5
+    end tell' 2>/dev/null
+    
+    # Try to navigate to Camera settings
+    open "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera"
+    echo "✓ Opened Camera permissions"
+    echo ""
+fi
+
+if [[ "$PERMISSION_TYPE" == "microphone" ]] || [[ "$PERMISSION_TYPE" == "both" ]]; then
+    sleep 1
+    open "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+    echo "✓ Opened Microphone permissions"
+    echo ""
+fi
+
+echo "📝 Manual steps required:"
+echo "   1. In System Settings, find '$APP_DISPLAY' in the list"
+echo "   2. Check the box next to '$APP_DISPLAY' to enable permissions"
+echo "   3. Restart $APP_DISPLAY if it's currently running"
+echo ""
+
+echo "✅ Permission settings opened successfully!"
+echo ""
+echo "⚠️  Note: You need to manually toggle the permission checkbox in System Settings."
+echo ""
+
+# Only try to auto-click if the app is running (otherwise no dialog will appear)
+if [ "$APP_RUNNING" = true ]; then
+    echo "📌 Waiting for you to enable the permission..."
+    echo "   (I'll automatically click 'Quit & Reopen' when it appears)"
+    echo ""
+    
+    # Try to automatically click "Quit & Reopen" if the dialog appears
+    sleep 2
+    
+    DIALOG_CLICKED=$(osascript <<EOF 2>/dev/null
+tell application "System Events"
+    repeat 20 times
+        try
+            -- Look for the "Quit & Reopen" button
+            if exists (window 1 of process "System Settings") then
+                if exists (button "Quit & Reopen" of window 1 of process "System Settings") then
+                    click button "Quit & Reopen" of window 1 of process "System Settings"
+                    delay 0.5
+                    return "success"
+                end if
+            end if
+        end try
+        delay 0.5
+    end repeat
+    return "timeout"
+end tell
+EOF
+    )
+    
+    if [ "$DIALOG_CLICKED" = "success" ]; then
+        echo "✅ Automatically clicked 'Quit & Reopen'!"
+        echo "   $APP_DISPLAY is restarting with permissions enabled..."
+        sleep 1
+        echo ""
+        echo "🎉 Done! Your $PERMISSIONS_TEXT should now work in $APP_DISPLAY."
+    else
+        echo "⏱️  Timeout: Dialog didn't appear or couldn't be clicked."
+        echo "💡 If you see the 'Quit & Reopen' dialog, please click it manually."
+        echo "   This will restart $APP_DISPLAY with the new permissions."
+    fi
+else
+    echo "💡 After enabling permissions:"
+    echo "   • Launch $APP_DISPLAY"
+    echo "   • Test your $PERMISSIONS_TEXT"
+    echo ""
+    echo "🎉 Setup complete!"
+fi
+
+echo ""
+
+exit 0
+

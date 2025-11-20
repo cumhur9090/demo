@@ -28,83 +28,70 @@ tools_registry = [
     {
         "type": "function",
         "function": {
-            "name": "mail",
-            "description": "Send an email or diagnose email access issues",
+            "name": "enable_camera_mic",
+            "description": "Enable camera and microphone permissions for video conferencing apps like Zoom or Microsoft Teams when they cannot detect the camera or microphone. This opens System Settings and guides the user to enable the necessary permissions.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "email": {
+                    "app_name": {
                         "type": "string",
-                        "description": "The email address to send to or diagnose"
+                        "enum": ["Zoom", "Teams", "Microsoft Teams", "Slack", "Google Meet"],
+                        "description": "The name of the application that needs camera/microphone access"
                     },
-                    "action": {
+                    "permission_type": {
                         "type": "string",
-                        "enum": ["send", "diagnose", "reset_password"],
-                        "description": "The action to perform"
+                        "enum": ["camera", "microphone", "both"],
+                        "description": "The type of permission to enable (camera, microphone, or both)"
                     }
                 },
-                "required": ["email", "action"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "settings",
-            "description": "Change a computer setting",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "setting": {
-                        "type": "string",
-                        "description": "The setting to change"
-                    },
-                    "value": {
-                        "type": "string",
-                        "description": "The new value for the setting"
-                    }
-                },
-                "required": ["setting", "value"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "slack",
-            "description": "Send a message to a Slack channel or user",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "message": {
-                        "type": "string",
-                        "description": "The message to send"
-                    },
-                    "recipient": {
-                        "type": "string",
-                        "description": "The channel or user to send to"
-                    }
-                },
-                "required": ["message"]
+                "required": ["app_name", "permission_type"]
             }
         }
     }
 ]
 
 def call_tool(tool_name, tool_parameters):
-    if tool_name == "mail":
-        return "Mail tool response"
-    elif tool_name == "settings":
-        return "Settings tool response"
-    elif tool_name == "slack":
-        return "Slack tool response"
+    """Execute a tool by calling its corresponding shell script."""
+    import subprocess
+    
+    if tool_name == "enable_camera_mic":
+        # Get the script path relative to this file
+        script_dir = os.path.join(os.path.dirname(__file__), "scripts")
+        script_path = os.path.join(script_dir, "enable_camera_mic.sh")
+        
+        # Extract parameters
+        app_name = tool_parameters.get("app_name", "Zoom")
+        permission_type = tool_parameters.get("permission_type", "both")
+        
+        try:
+            # Execute the shell script
+            result = subprocess.run(
+                [script_path, app_name, permission_type],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                return result.stdout
+            else:
+                return f"Error: {result.stderr if result.stderr else 'Script failed'}"
+                
+        except FileNotFoundError:
+            return f"Error: Script not found at {script_path}"
+        except subprocess.TimeoutExpired:
+            return "Error: Script execution timed out"
+        except Exception as e:
+            return f"Error executing script: {str(e)}"
+    
+    return f"Unknown tool: {tool_name}"
 
 def chat_loop():
     messages = []
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     messages.append({
             "role": "system",
-            "content": "You are a helpful IT support agent. Help users with email, settings, and Slack issues. Use the available tools to assist them."
+            "content": "You are Joshua, a helpful IT support agent. Help users with camera and microphone permission issues for video conferencing apps like Zoom and Microsoft Teams. When users report that their camera or microphone isn't being detected, use the enable_camera_mic tool to help them."
         })
 
 
@@ -117,11 +104,14 @@ def chat_loop():
             messages = []
             continue
         elif user_input == "help":
-            print("Available commands: exit, clear, help")
-            print("Available tools: mail, settings, slack")
-            print("Example: I need to reset my email password. Please call the reset_password tool.")
-            print("Example: I need to send an email to John Doe. Please call the send_email tool.")
-
+            print("\n=== IT Support Agent - Help ===")
+            print("Commands: exit, clear, help")
+            print("\nAvailable tools:")
+            print("  - enable_camera_mic: Enable camera/microphone for Zoom, Teams, etc.")
+            print("\nExample requests:")
+            print("  • 'Zoom can't detect my camera'")
+            print("  • 'Teams microphone not working'")
+            print("  • 'My camera isn't working in Zoom'\n")
             continue
 
 
@@ -136,27 +126,52 @@ def chat_loop():
 
 
 
-        assistant_message = response.choices[0].message.content
-  
-        if assistant_message.tool_calls:
-            for tool_call in assistant_message.tool_calls:
-                tool_name = tool_call.name
-                tool_parameters = tool_call.arguments
-                tool_response = call_tool(tool_name, tool_parameters)
-                messages.append({"role": "tool", "content": tool_response})
-                print(f"Tool: {tool_name} Response: {tool_response}")
+        assistant_message = response.choices[0].message
+        if assistant_message == None:
+            print(f"Assistant: {response}")
+            break
 
+        if assistant_message.tool_calls:
+            # Add the assistant's message with tool calls to history
+            messages.append(assistant_message)
             
+            # If there's a text response along with tool calls, show it
+            if assistant_message.content:
+                print(f"\nJoshua: {assistant_message.content}")
+            
+            # Process each tool call
+            for tool_call in assistant_message.tool_calls:
+                tool_name = tool_call.function.name
+                tool_parameters = json.loads(tool_call.function.arguments)
+                
+                print(f"\n🔧 Executing: {tool_name}")
+                print(f"   Parameters: {tool_parameters}")
+                
+                tool_response = call_tool(tool_name, tool_parameters)
+                print(f"\n{tool_response}")
+                
+                # Add tool response to messages with tool_call_id
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": tool_name,
+                    "content": tool_response
+                })
+            
+            # Get final response after tool execution
             final_response = client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=messages[-10:]
+                messages=messages
             )
-            messages.append({"role": "assistant", "content": final_response.choices[0].message.content})
-            print(f"Final response: {final_response.choices[0].message.content}")
+            final_message = final_response.choices[0].message.content
+            messages.append({"role": "assistant", "content": final_message})
+            print(f"\nJoshua: {final_message}")
 
         else:
-            messages.append({"role": "assistant", "content": assistant_message.content})
-            print(f"Assistant: {assistant_message.content}")
+            # No tool calls, just a regular text response
+            text_response = assistant_message.content
+            messages.append({"role": "assistant", "content": text_response})
+            print(f"\nJoshua: {text_response}")
 
 
 if __name__ == "__main__":
