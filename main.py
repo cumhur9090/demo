@@ -47,6 +47,40 @@ tools_registry = [
                 "required": ["app_name", "permission_type"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "clear_chrome_cookies",
+            "description": "Clear Chrome cookies for a specific domain to fix SSO (Single Sign-On) login loops. Common for corporate authentication issues where users get stuck in redirect loops with Microsoft, Okta, or Google SSO.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "type": "string",
+                        "description": "The domain to clear cookies for (e.g., 'login.microsoftonline.com', 'accounts.google.com', 'okta.com')"
+                    }
+                },
+                "required": ["domain"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reset_outlook_profile",
+            "description": "Reset Microsoft Outlook profile to fix 'Loading Profile' or 'Stuck Syncing' issues. This creates a fresh Outlook profile while backing up the old one.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "backup": {
+                        "type": "boolean",
+                        "description": "Whether to backup the old profile before resetting (default: true)"
+                    }
+                },
+                "required": []
+            }
+        }
     }
 ]
 
@@ -54,44 +88,61 @@ def call_tool(tool_name, tool_parameters):
     """Execute a tool by calling its corresponding shell script."""
     import subprocess
     
+    script_dir = os.path.join(os.path.dirname(__file__), "scripts")
+    
     if tool_name == "enable_camera_mic":
-        # Get the script path relative to this file
-        script_dir = os.path.join(os.path.dirname(__file__), "scripts")
         script_path = os.path.join(script_dir, "enable_camera_mic.sh")
-        
-        # Extract parameters
         app_name = tool_parameters.get("app_name", "Zoom")
         permission_type = tool_parameters.get("permission_type", "both")
+        args = [script_path, app_name, permission_type]
         
-        try:
-            # Execute the shell script
-            result = subprocess.run(
-                [script_path, app_name, permission_type],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            if result.returncode == 0:
-                return result.stdout
-            else:
-                return f"Error: {result.stderr if result.stderr else 'Script failed'}"
-                
-        except FileNotFoundError:
-            return f"Error: Script not found at {script_path}"
-        except subprocess.TimeoutExpired:
-            return "Error: Script execution timed out"
-        except Exception as e:
-            return f"Error executing script: {str(e)}"
+    elif tool_name == "clear_chrome_cookies":
+        script_path = os.path.join(script_dir, "clear_chrome_cookies.sh")
+        domain = tool_parameters.get("domain", "")
+        args = [script_path, domain]
+        
+    elif tool_name == "reset_outlook_profile":
+        script_path = os.path.join(script_dir, "reset_outlook_profile.sh")
+        backup = tool_parameters.get("backup", True)
+        backup_flag = "true" if backup else "false"
+        args = [script_path, backup_flag]
+        
+    else:
+        return f"Unknown tool: {tool_name}"
     
-    return f"Unknown tool: {tool_name}"
+    try:
+        # Execute the shell script
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode == 0:
+            return result.stdout
+        else:
+            return f"Error: {result.stderr if result.stderr else 'Script failed'}"
+            
+    except FileNotFoundError:
+        return f"Error: Script not found at {script_path}"
+    except subprocess.TimeoutExpired:
+        return "Error: Script execution timed out"
+    except Exception as e:
+        return f"Error executing script: {str(e)}"
 
 def chat_loop():
     messages = []
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     messages.append({
             "role": "system",
-            "content": "You are Joshua, a helpful IT support agent. Help users with camera and microphone permission issues for video conferencing apps like Zoom and Microsoft Teams. When users report that their camera or microphone isn't being detected, use the enable_camera_mic tool to help them."
+            "content": """You are Joshua, a helpful IT support agent. Help users with common IT issues:
+            
+1. Camera/Microphone Issues: When users can't access camera or mic in Zoom/Teams, use enable_camera_mic tool
+2. SSO Login Loops: When users are stuck in infinite login redirects with corporate SSO, use clear_chrome_cookies tool
+3. Outlook Loading Issues: When Outlook is stuck on "Loading Profile" or won't sync, use reset_outlook_profile tool
+
+Be friendly, ask clarifying questions if needed, and explain what you're doing."""
         })
 
 
@@ -107,11 +158,13 @@ def chat_loop():
             print("\n=== IT Support Agent - Help ===")
             print("Commands: exit, clear, help")
             print("\nAvailable tools:")
-            print("  - enable_camera_mic: Enable camera/microphone for Zoom, Teams, etc.")
+            print("  - enable_camera_mic: Fix camera/microphone for Zoom, Teams, etc.")
+            print("  - clear_chrome_cookies: Fix SSO login loops")
+            print("  - reset_outlook_profile: Fix Outlook stuck loading/syncing")
             print("\nExample requests:")
             print("  • 'Zoom can't detect my camera'")
-            print("  • 'Teams microphone not working'")
-            print("  • 'My camera isn't working in Zoom'\n")
+            print("  • 'I'm stuck in a login loop with Microsoft SSO'")
+            print("  • 'Outlook is stuck on Loading Profile'\n")
             continue
 
 
