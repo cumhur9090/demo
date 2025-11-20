@@ -6,6 +6,11 @@
 APP_NAME="${1:-Zoom}"
 PERMISSION_TYPE="${2:-both}"
 
+# # echo "=== Camera/Microphone Permission Manager (macOS) ==="
+# # echo "Application: $APP_NAME"
+# # echo "Permission Type: $PERMISSION_TYPE"
+# # echo ""
+
 # Normalize app name
 case "$APP_NAME" in
     "Teams"|"Microsoft Teams")
@@ -27,14 +32,20 @@ esac
 
 # Check if running on macOS
 if [[ "$OSTYPE" != "darwin"* ]]; then
-    echo "Error: This script only works on macOS"
+    # # echo "Error: This script only works on macOS"
     exit 1
 fi
 
 # Check if Terminal has accessibility permissions (needed to auto-click)
 ACCESSIBILITY_ENABLED=$(osascript -e 'tell application "System Events" to get UI elements enabled' 2>/dev/null)
+#if [ "$ACCESSIBILITY_ENABLED" != "true" ]; then
+    # # echo "⚠️  Note: For automatic 'Quit & Reopen' clicking, Terminal needs"
+    # # echo "   Accessibility permissions in System Settings → Privacy & Security."
+    # # echo "   (Script will continue, but you may need to click manually)"
+    # # echo ""
+#fi
 
-echo "🔍 Checking current permissions..."
+# # echo "🔍 Checking current permissions..."
 sleep 0.5
 
 # Check if the app is currently running
@@ -43,32 +54,29 @@ case "$APP_NAME" in
     "Zoom")
         if pgrep -x "zoom.us" > /dev/null; then
             APP_RUNNING=true
-            echo "✓ Zoom is currently running"
-            sleep 0.5
+            # # echo "✓ Zoom is currently running"
         fi
         ;;
     "Teams"|"Microsoft Teams")
         if pgrep -x "Microsoft Teams" > /dev/null; then
             APP_RUNNING=true
-            echo "✓ Microsoft Teams is currently running"
-            sleep 0.5
+            # # echo "✓ Microsoft Teams is currently running"
         fi
         ;;
     "Slack")
         if pgrep -x "Slack" > /dev/null; then
             APP_RUNNING=true
-            echo "✓ Slack is currently running"
-            sleep 0.5
+            # # echo "✓ Slack is currently running"
         fi
         ;;
 esac
 
-if [ "$APP_RUNNING" = false ]; then
-    echo "ℹ️  $APP_DISPLAY is not currently running"
-    sleep 0.5
-fi
+#if [ "$APP_RUNNING" = false ]; then
+    # # echo "⚠️  $APP_DISPLAY is not currently running"
+    # # echo "   (No need to quit & reopen)"
+#fi
 
-echo ""
+# # echo ""
 
 # Determine what permissions to enable
 if [[ "$PERMISSION_TYPE" == "camera" ]]; then
@@ -78,6 +86,15 @@ elif [[ "$PERMISSION_TYPE" == "microphone" ]]; then
 else
     PERMISSIONS_TEXT="Camera and Microphone"
 fi
+
+# # echo "📋 Actions to perform:"
+# # echo "   1. Open System Settings"
+# # echo "   2. Navigate to Privacy & Security"
+# # echo "   3. Enable $PERMISSIONS_TEXT for $APP_DISPLAY"
+# # echo ""
+
+# Open System Settings to Privacy & Security
+# # echo "🔧 Opening System Settings..."
 
 # Open Privacy & Security settings (Camera or Microphone)
 if [[ "$PERMISSION_TYPE" == "camera" ]] || [[ "$PERMISSION_TYPE" == "both" ]]; then
@@ -106,9 +123,16 @@ if [[ "$PERMISSION_TYPE" == "microphone" ]] || [[ "$PERMISSION_TYPE" == "both" ]
     sleep 0.5
 fi
 
-echo ""
-echo "📝 Please find '$APP_DISPLAY' in the list and check the box to enable permissions"
-sleep 0.5
+# # echo "📝 Manual steps required:"
+# # echo "   1. In System Settings, find '$APP_DISPLAY' in the list"
+# # echo "   2. Check the box next to '$APP_DISPLAY' to enable permissions"
+# # echo "   3. Restart $APP_DISPLAY if it's currently running"
+# # echo ""
+
+# # echo "✅ Permission settings opened successfully!"
+# # echo ""
+# # echo "⚠️  Note: You need to manually toggle the permission checkbox in System Settings."
+# # echo ""
 
 # Only try to auto-click if the app is running (otherwise no dialog will appear)
 if [ "$APP_RUNNING" = true ]; then
@@ -142,29 +166,25 @@ EOF
     )
     
     if [ "$DIALOG_CLICKED" = "success" ]; then
-        echo "✅ Automatically clicked 'Quit & Reopen'!"
-        sleep 0.5
-        echo "   $APP_DISPLAY is restarting with permissions enabled..."
-        sleep 0.5
-        echo ""
-        echo "🎉 Done! Your $PERMISSIONS_TEXT should now work in $APP_DISPLAY."
-    else
-        echo "ℹ️  Dialog didn't appear or couldn't be clicked automatically."
-        sleep 0.5
-        echo "💡 If you see the 'Quit & Reopen' dialog, please click it manually."
-        echo "   This will restart $APP_DISPLAY with the new permissions."
-    fi
-else
-    echo ""
-    echo "💡 After enabling permissions:"
-    sleep 0.5
-    echo "   • Launch $APP_DISPLAY"
-    echo "   • Test your $PERMISSIONS_TEXT"
-    sleep 0.5
-    echo ""
-    echo "🎉 Setup complete!"
-fi
+        # # echo "✅ Automatically clicked 'Quit & Reopen'!"
+        # # echo "   $APP_DISPLAY is restarting with permissions enabled..."
+        sleep 1
+        # # echo ""
+        # # echo "🎉 Done! Your $PERMISSIONS_TEXT should now work in $APP_DISPLAY."
+  #  else
+        # # echo "⏱️  Timeout: Dialog didn't appear or couldn't be clicked."
+        # # echo "💡 If you see the 'Quit & Reopen' dialog, please click it manually."
+        # # echo "   This will restart $APP_DISPLAY with the new permissions."
+ #   fi
+#else
+    # # echo "💡 After enabling permissions:"
+    # # echo "   • Launch $APP_DISPLAY"
+    # # echo "   • Test your $PERMISSIONS_TEXT"
+    # # echo ""
+    # # echo "🎉 Setup complete!"
+#fi
 
-echo ""
+# # echo ""
 
 exit 0
+
